@@ -1,0 +1,23 @@
+{
+  "appId": "com.himayathsagar.dtrverify",
+  "appName": "Himayath Sagar",
+  "webDir": "www",
+  "backgroundColor": "#f2f5fb",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover"
+    },
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 4000,
+      "launchFadeOutDuration": 180,
+      "backgroundColor": "#1556b8",
+      "showSpinner": false
+    }
+  }
+}

@@ -1,0 +1,45 @@
+name: Publish signed APK
+
+# The release APK is signed with the app's permanent key outside GitHub (tools/apksign.py),
+# then pushed to the "signed-apk" branch. This checks that it installs and opens on an
+# emulator, and publishes it as the download on the "apk" release.
+on:
+  push:
+    branches: [signed-apk]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install and open on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash tools/ci/check-signed.sh
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view apk >/dev/null 2>&1 || gh release create apk --title "Android APK: Himayath Sagar" --notes "Install Himayath-Sagar.apk."
+          gh release upload apk Himayath-Sagar.apk --clobber
+          gh release edit apk --title "Android APK: Himayath Sagar" --notes "Download **Himayath-Sagar.apk** and install it. It is signed with the app's permanent key, so every later update installs over it and keeps the entries and data on the phone. This public copy has no consumer data and no Google Sheet link: on a new phone use the full APK from the admin, or sign in as admin and load the section data file, or get it from the Google Sheet with the web app link."
+          gh release upload apk check-shots.zip --clobber || true
