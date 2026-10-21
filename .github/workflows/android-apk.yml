@@ -112,7 +112,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated
-          script: node tools/ci/emulator-test.mjs apk/app-debug.apk
+          script: node tools/ci/emulator-test.mjs apk/app-debug.apk; pip3 install --quiet --break-system-packages cryptography || true; node tools/ci/builtin-data-test.mjs
 
       - name: Publish screenshots
         if: always()
