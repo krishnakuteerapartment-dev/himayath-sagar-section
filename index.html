@@ -191,6 +191,10 @@ select.sel{display:block;width:100%;max-width:100%;min-height:46px;border:1px so
 .chips2{display:flex;gap:4px}.chip2{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer}
 .chip2[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .dlgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dlrows{display:flex;flex-direction:column;gap:6px}
+.dlrow{display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--line)}
+.dlrow>span:first-child{flex:1;min-width:0;font-size:14px}
+.dlrow .btn,.row .btn[data-fmt]{flex:none}
 table.rep th.grp{text-align:center;border-left:1px solid var(--line);color:var(--ink)}
 table.rep tfoot td{background:var(--surface-2);font-weight:600;border-top:2px solid var(--line)}
 .tsub{font-size:11px;color:var(--muted);font-weight:400}
@@ -790,7 +794,7 @@ const Drawer={el:null,bg:null,
         <div class="dr-sec">Quick actions</div>
         ${this.item('sync',DI.sync,'Sync now',h(sync),dis)}
         ${this.item('scan',DI.qr,'Scan meters',S.dtr?'DTR '+h(S.dtr)+' · '+h(dtrName(S.dtr)):'Choose a DTR first',dis)}
-        ${this.item('csv',DI.dl,'Download all findings','CSV for the ERO',dis)}
+        ${this.item('xlsx',DI.dl,'Download Excel report','All reports in one Excel file',dis)}
         <div class="dr-line"></div>
         <div class="dr-sec">Settings</div>
         ${this.item('g:bkCard',DI.sheet,'Google Sheet sync','Sheet link, phones that synced',dis)}
@@ -830,7 +834,7 @@ const Drawer={el:null,bg:null,
       if(!isOnline()){toast('Offline. Entries will sync when the internet is back.');return}
       toast('Syncing…');Backup.sync().then(()=>{const l=Backup.cfg().last;toast(l&&l.ok?'Synced with Google Sheet':'Sync failed'+(l&&l.msg?': '+l.msg:''))});return}
     if(a==='scan'){if(!S.dtr){nav('verify');openDtrSheet();return}nav('verify');if(NScan.available())NScan.start('verify');else{S.panel='scan';renderVerify();startLive()}return}
-    if(a==='csv'){exportAll();return}
+    if(a==='xlsx'){exportFullReport();return}
     if(a==='signout'){(async()=>{const ok=await N.confirm('Sign out?','Entries stay saved on this phone.','Sign out');if(ok!==false)signOut()})();return}
   }
 };
@@ -904,7 +908,7 @@ function renderVerify(){
   <div id="confBox">${confBanner(d)}</div>
   <div class="stabs" id="stabsBox" role="group" aria-label="Show services">${stabsHtml(st)}</div>
   <div class="list" id="svcList">${listHtml(d)}</div>
-  <div class="row between"><span class="small muted">Saved ${Store.mode==='db'?'to this page, synced across your devices':'on this device'}</span><button class="btn sm" id="expD">${I.dl}Export this DTR</button></div>
+  <div class="row between"><span class="small muted">Saved ${Store.mode==='db'?'to this page, synced across your devices':'on this device'}</span><span class="row">${xBtns('data-xd','1')}</span></div>
   `:`<div class="card empty">Choose a DTR structure code above to start verifying its services.</div>`}`;
   bindVerify(d);
 }
@@ -1042,7 +1046,7 @@ function bindVerify(d){
   $('irBtn').onclick=()=>{S.panel=S.panel==='ir'?null:'ir';stopCam();renderVerify()};
   const find=()=>{const v=$('manual').value.trim();if(v){$('manual').value='';processScan(v,'Typed')}};
   $('findBtn').onclick=find;$('manual').onkeydown=e=>{if(e.key==='Enter')find()};
-  $('expD').onclick=()=>exportDtr(d);
+  main.querySelectorAll('[data-xd]').forEach(b=>b.onclick=()=>downloadRows('DTR_'+d.code+'_verification','DTR '+d.code,rowsDtr(d),b.dataset.fmt));
   bindPanel();bindDynamic(d);
 }
 function rerenderKeep(){refreshVerify(false)}
@@ -1528,7 +1532,7 @@ function renderFeeder(){
   <div id="fConf">${fBanner(f)}</div>
   <div class="stabs four" id="fTabs" role="group" aria-label="Show structures">${fTabsHtml(st)}</div>
   <div class="list" id="fList">${fListHtml(f,el)}</div>
-  <div class="row between"><span class="small muted">Saved ${Store.mode==='db'?'to this page, synced':'on this device'}</span><button class="btn sm" id="fExp">${I.dl}Export this feeder</button></div>`;
+  <div class="row between"><span class="small muted">Saved ${Store.mode==='db'?'to this page, synced':'on this device'}</span><span class="row">${xBtns('data-xfc','1')}</span></div>`;
   const sel=$('fSel');sel.onchange=()=>selectFeeder(sel.value);
   $('fPrev').onclick=()=>{if(idx>0)selectFeeder(S.feeders[idx-1].fc)};$('fNext').onclick=()=>{if(idx<S.feeders.length-1)selectFeeder(S.feeders[idx+1].fc)};
   const fs=$('fScanBtn');if(fs)fs.onclick=()=>{if(NScan.available())return NScan.start('feeder');S.fpanel=S.fpanel==='scan'?null:'scan';stopCam();renderFeeder();if(S.fpanel==='scan')startLive()};
@@ -1540,7 +1544,7 @@ function renderFeeder(){
       hint.querySelectorAll('[data-pickf]').forEach(b=>b.onclick=()=>{hint.hidden=true;inp.value='';processStruct(b.dataset.pickf,'Typed')});return}
     hint.hidden=true;inp.value='';processStructText(v,'Typed')};
   $('fCheck').onclick=check;inp.onkeydown=e=>{if(e.key==='Enter')check()};
-  $('fExp').onclick=()=>exportFeeder(f);
+  main.querySelectorAll('[data-xfc]').forEach(b=>b.onclick=()=>downloadRows('Feeder_'+f.fc+'_structures','Feeder '+f.fc,rowsFeederCheck(f),b.dataset.fmt));
   bindPanel();bindFDynamic();
 }
 function bindFDynamic(){
@@ -1565,13 +1569,6 @@ async function resolveFConflict(code,keep){
   await Store.putF(keep,code,{...w.rec,st:keep===d.fc?'ok':'other',mf:d.fc||'',t:now,resolved:1,resolvedBy:Who.id});
   for(const x of c)if(x.fc!==keep)await Store.putF(x.fc,code,{del:1,t:now,movedTo:keep,by:Who.id,reason:'Admin resolved conflict'});
   toast('Structure '+code+' kept on '+fName(keep));vReport();
-}
-function exportFeeder(f){
-  const v=fvrec(f.fc),el=fElsewhere(),rows=[['FEEDER','FEEDER_CODE','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','SERVICES','RESULT','MAPPING_FEEDER','SOURCE','TIME','REASON']];
-  for(const d of f.list){const r=v.s[d.code],e=el.get(d.code);
-    rows.push([f.name,f.fc,d.code,d.name||'NO NAME',STYPE[d.type]||d.type,d.list.length,live(r)?FLBL[r.st].toUpperCase():e?'SEEN ON '+fName(e.fc):'PENDING',fName(d.fc),live(r)?r.src:'',live(r)?tstr(r.t):'',live(r)?r.reason||'':''])}
-  for(const [k,r] of Object.entries(v.s))if(live(r)&&(r.st==='other'||r.st==='conf')){const d=S.dtrMap.get(k);if(d)rows.push([f.name,f.fc,k,d.name||'NO NAME',STYPE[d.type]||d.type,d.list.length,FLBL[r.st].toUpperCase(),d.fc?fName(d.fc):'none',r.src,tstr(r.t),r.reason||''])}
-  saveRaw('Feeder_'+f.fc+'_structures.csv',rows.map(csvRow).join('\n'));
 }
 
 /* ---------- AREAS: area-code-wise structure check ----------
@@ -1694,7 +1691,7 @@ function renderArea(){
   <div id="aRes">${aResultBlock()}</div>
   <div class="stabs four" id="aTabs" role="group" aria-label="Show structures">${aTabsHtml(st)}</div>
   <div class="list" id="aList">${aListHtml(a)}</div>
-  <div class="row between"><span class="small muted">Saved ${Store.mode==='db'?'to this page, synced':'on this device'}</span><button class="btn sm" id="aExp">${I.dl}Export this area</button></div>`;
+  <div class="row between"><span class="small muted">Saved ${Store.mode==='db'?'to this page, synced':'on this device'}</span><span class="row">${xBtns('data-xac','1')}</span></div>`;
   const sel=$('aSel');sel.onchange=()=>selectArea(sel.value);
   $('aPrev').onclick=()=>{if(idx>0)selectArea(S.areas[idx-1].ac)};$('aNext').onclick=()=>{if(idx<S.areas.length-1)selectArea(S.areas[idx+1].ac)};
   const sb=$('aScanBtn');if(sb)sb.onclick=()=>{if(NScan.available())return NScan.start('area');S.apanel=S.apanel==='scan'?null:'scan';stopCam();renderArea();if(S.apanel==='scan')startLive()};
@@ -1706,7 +1703,7 @@ function renderArea(){
       hint.querySelectorAll('[data-picka]').forEach(b=>b.onclick=()=>{hint.hidden=true;inp.value='';processArea(b.dataset.picka,'Typed')});return}
     hint.hidden=true;inp.value='';processAreaText(v,'Typed')};
   $('aCheck').onclick=check;inp.onkeydown=e=>{if(e.key==='Enter')check()};
-  $('aExp').onclick=()=>exportArea(a);
+  main.querySelectorAll('[data-xac]').forEach(b=>b.onclick=()=>downloadRows('Area_'+a.ac+'_structures','Area '+a.ac,rowsAreaCheck(a),b.dataset.fmt));
   bindPanel();bindADynamic();
 }
 function bindADynamic(){
@@ -1724,12 +1721,6 @@ function bindADynamic(){
 }
 function aRerender(){refreshA()}
 function selectArea(ac){if(!S.aMap.has(ac))return;S.adr=ac;S.alast=null;S.apending=null;S.aopen=null;S.atab='pending';S.alimit=200;try{localStorage.setItem(LSAS,ac)}catch(e){}stopCam();renderArea();if(S.apanel==='scan'&&!S.liveBlocked)startLive()}
-function exportArea(a){
-  const v=avrec(a.ac),rows=[['AREA_CODE','AREA_NAME','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','SERVICES_IN_AREA','TOTAL_SERVICES','ALL_MAPPING_AREAS','RESULT','SOURCE','TIME']];
-  for(const {d,n} of a.list){const r=v.s[d.code];rows.push([a.ac,a.name,d.code,d.name||'NO NAME',STYPE[d.type]||d.type,n,d.list.length,Object.keys(d.acs||{}).join(' '),live(r)?ALBL[r.st].toUpperCase():'PENDING',live(r)?r.src:'',live(r)?tstr(r.t):''])}
-  for(const [k,r] of Object.entries(v.s))if(live(r)&&r.st==='other'){const d=S.dtrMap.get(k);if(d)rows.push([a.ac,a.name,k,d.name||'NO NAME',STYPE[d.type]||d.type,0,d.list.length,Object.keys(d.acs||{}).join(' '),ALBL.other.toUpperCase(),r.src,tstr(r.t)])}
-  saveRaw('Area_'+a.ac+'_structures.csv',rows.map(csvRow).join('\n'));
-}
 
 /* ---------- SERVICE: service-wise lookup, status, move between DTRs, history ----------
    Type a service no, UKSCNO or meter no: the service's details, its master structure code, whether and when it was verified,
@@ -1916,15 +1907,16 @@ function rSummary(R){
     <div><dt>Feeders</dt><dd>${S.feeders.length}</dd></div><div><dt>Area codes</dt><dd>${S.areas.length}</dd></div>
     <div><dt>Not found / no access</dt><dd>${fmt(t.nf)}</dd></div><div><dt>Seen on another DTR</dt><dd>${fmt(t.el)}</dd></div></dl></div>
   <div class="card stack"><h3>Downloads</h3>
-    <div class="dlgrid"><button class="btn sm" data-x="feeders">${I.dl}Feeder-wise report</button><button class="btn sm" data-x="areas">${I.dl}Area-wise report</button>
-    <button class="btn sm" data-x="dtrs">${I.dl}DTR details (${fmt(S.dtrs.length)})</button><button class="btn sm" data-x="all">${I.dl}All service findings</button></div></div>`;
+    <button class="btn primary" data-xfull="1">${I.dl}Full report in Excel (all sheets)</button>
+    <p class="hint" style="margin:0">One Excel file with Summary, DTR-wise, service findings, feeder-wise, structures on each feeder, area-wise, structures in each area and conflicts, each on its own sheet.</p>
+    <div class="dlrows">${Object.keys(XLBL).map(k=>`<div class="dlrow"><span>${h(XLBL[k])}${k==='services'?` <span class="muted">(${fmt(S.live.length)} rows)</span>`:''}</span>${xBtns('data-x',k)}</div>`).join('')}</div></div>`;
 }
 function rDtr(R){
   const elsew=elsewhereIndex();
   const rows=S.dtrs.map(d=>({d,st:dtrStats(d,elsew)})).filter(x=>S.rall?true:x.st.ok+x.st.nf+x.st.other+x.st.unk+x.st.el>0);
   const shown=rows.slice(0,S.rlimit||150);
   return `<div class="row between"><div class="chips2"><button class="chip2" data-rall="0" aria-pressed="${!S.rall}">Started</button><button class="chip2" data-rall="1" aria-pressed="${!!S.rall}">All ${fmt(S.dtrs.length)}</button></div>
-    <div class="row"><button class="btn sm" data-x="dtrs">${I.dl}DTR details</button><button class="btn sm" data-x="all">${I.dl}Findings</button></div></div>
+    <div class="row">${xBtns('data-x','dtrs')}</div></div>
   ${rows.length?`<div class="list">${shown.map(({d,st})=>`<button class="li" data-d="${h(d.code)}">
       <div class="t"><span class="mono">${h(d.code)}</span> · ${h(d.name||'NO NAME')}</div><div class="r"><b>${st.ok}</b>/${st.n} ${meter(st.ok+st.nf+st.el,st.n)}</div>
       <div class="s">${h(d.feeder?shortF(d.feeder):'No feeder')} · pending ${st.pending}${st.other?` · wrong DTR ${st.other}`:''}${st.unk?` · unknown ${st.unk}`:''}${st.nf+st.el?` · not found ${st.nf+st.el}`:''}</div><div></div></button>`).join('')}
@@ -1944,14 +1936,14 @@ function rFeeder(R){
       <div class="s wide">Structures: ${st.n} (${Object.entries(ty).map(([t,n])=>n+' '+t).join(', ')}) · confirmed ${st.ok}${st.other?` · from other ${st.other}`:''}${st.nf+st.el?` · not on feeder ${st.nf+st.el}`:''}</div>
       <div class="s wide">Services: ${fmt(a.svc)} (${fmt(a.p1)} 1Φ / ${fmt(a.p3)} 3Φ) · ${kw(a.ld)} kW · verified ${fmt(a.ok)} · pending ${fmt(a.p)}</div></button>
       ${open?feederDetail(f,R):''}`}).join('');
-  return `<div class="row between"><h3>Feeder-wise report</h3><button class="btn sm" data-x="feeders">${I.dl}Download</button></div>
+  return `<div class="row between"><h3>Feeder-wise report</h3><div class="row">${xBtns('data-x','feeders')}</div></div>
   ${totCard('All '+S.feeders.length+' feeders',T,TS,TC)}
   <div class="list">${rows}</div>
   <p class="hint">Structure counts come from the feeder check (Feeders tab). Service counts come from meter verification (Services tab). Tap a feeder for its structures.</p>`;
 }
 function feederDetail(f,R){
   const v=fvrec(f.fc),fel=fElsewhere();
-  return `<div class="detail"><div class="row between"><b>${h(f.name)}</b><div class="row"><button class="btn sm" data-gofeeder="${h(f.fc)}">Open in Feeders</button><button class="btn sm" data-xf="${h(f.fc)}">${I.dl}Download</button></div></div>
+  return `<div class="detail"><div class="row between"><b>${h(f.name)}</b><div class="row"><button class="btn sm" data-gofeeder="${h(f.fc)}">Open in Feeders</button>${xBtns('data-xf',f.fc)}</div></div>
   <div class="drows">${f.list.map(d=>{const r=v.s[d.code],e=fel.get(d.code);const a=R.byD.get(d.code)||zero();
     const chk=live(r)?FLBL[r.st]:e?'Seen on other feeder':'Pending';const cls=live(r)?(r.st==='ok'?'ok':r.st==='nf'?'bad':'warn'):e?'warn':'neutral';
     return `<div class="drow"><div><span class="mono">${h(d.code)}</span> ${h(d.name||'NO NAME')}</div><span class="pill ${cls}">${h(chk)}</span>
@@ -1965,21 +1957,22 @@ function rArea(R){
       <div class="s wide">Structures: ${st.n} · confirmed ${st.ok}${st.other?` · found, not mapped ${st.other}`:''}${st.nf?` · not in area ${st.nf}`:''}</div>
       <div class="s wide">Services: ${fmt(a.svc)} (${fmt(a.p1)} 1Φ / ${fmt(a.p3)} 3Φ) · ${kw(a.ld)} kW · verified ${fmt(a.ok)} · pending ${fmt(a.p)}</div></button>
       ${open?areaDetail(ar,R):''}`}).join('');
-  return `<div class="row between"><h3>Area-wise report</h3><button class="btn sm" data-x="areas">${I.dl}Download</button></div>
+  return `<div class="row between"><h3>Area-wise report</h3><div class="row">${xBtns('data-x','areas')}</div></div>
   ${totCard('All '+S.areas.length+' area codes',T,TS,TC)}
   <div class="list">${rows}</div>
-  <p class="hint">A structure can be linked to several areas, so structure links add up to more than 625. Codes 1017, 1018, 1018A and 1019 are billing groups. Tap an area for its structures.</p>`;
+  <p class="hint">A structure can be linked to several areas, so structure links add up to more than the number of structures. Tap an area for its structures.</p>`;
 }
 function areaDetail(ar,R){
   const v=avrec(ar.ac);
-  return `<div class="detail"><div class="row between"><b>${h(ar.ac)} · ${h(ar.name)}</b><div class="row"><button class="btn sm" data-goarea="${h(ar.ac)}">Open in Areas</button><button class="btn sm" data-xa="${h(ar.ac)}">${I.dl}Download</button></div></div>
+  return `<div class="detail"><div class="row between"><b>${h(ar.ac)} · ${h(ar.name)}</b><div class="row"><button class="btn sm" data-goarea="${h(ar.ac)}">Open in Areas</button>${xBtns('data-xa',ar.ac)}</div></div>
   <div class="drows">${ar.list.map(({d,n})=>{const r=v.s[d.code];let ok=0,p=0;for(const o of d.list)if(S.areaByName.get(o.an)===ar.ac){const s=R.ss.get(o.u);if(s==='ok')ok++;else if(s==='p')p++}
     const cls=live(r)?(r.st==='ok'?'ok':r.st==='nf'?'bad':'warn'):'neutral';
     return `<div class="drow"><div><span class="mono">${h(d.code)}</span> ${h(d.name||'NO NAME')}</div><span class="pill ${cls}">${h(live(r)?ALBL[r.st]:'Pending')}</span>
       <div class="tsub">${n} of ${d.list.length} services in this area · verified here ${ok} · pending here ${p}</div></div>`}).join('')}</div></div>`;
 }
 function rConflicts(R,cx,fcx){
-  return `<section id="conflicts" class="stack">
+  return `<div class="row between"><h3>Conflicts</h3><div class="row">${xBtns('data-x','conflicts')}</div></div>
+  <section id="conflicts" class="stack">
     <div class="row between"><h3>One service on two DTRs</h3><span class="pill ${cx.size?'bad':'ok'}">${cx.size?cx.size+' open':'None'}</span></div>
     ${cx.size?[...cx].map(([u,c])=>{const o=S.byU.get(u);if(!o)return'';return `<div class="card stack cfl">
       <div class="row between"><div><span class="mono" style="font-weight:600">${h(o.s)}</span> · UKSCNO <span class="mono">${h(o.u)}</span></div>${phPill(o.ph)}</div>
@@ -2002,43 +1995,72 @@ function bindReport(){
   main.querySelectorAll('[data-ro]').forEach(tr=>tr.onclick=()=>{S.ropen=S.ropen===tr.dataset.ro?null:tr.dataset.ro;const y=window.scrollY;vReport();window.scrollTo(0,y)});
   main.querySelectorAll('[data-rall]').forEach(b=>b.onclick=()=>{S.rall=b.dataset.rall==='1';S.rlimit=150;vReport()});
   const rm=$('rMore');if(rm)rm.onclick=()=>{S.rlimit=(S.rlimit||150)+150;const y=window.scrollY;vReport();window.scrollTo(0,y)};
-  main.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>({feeders:exportFeederReport,areas:exportAreaReport,dtrs:exportDtrDetails,all:exportAll})[b.dataset.x]());
-  main.querySelectorAll('[data-xf]').forEach(b=>b.onclick=e=>{e.stopPropagation();exportFeederDetail(b.dataset.xf)});
-  main.querySelectorAll('[data-xa]').forEach(b=>b.onclick=e=>{e.stopPropagation();exportAreaDetail(b.dataset.xa)});
+  main.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>exportReport(b.dataset.x,b.dataset.fmt));
+  main.querySelectorAll('[data-xfull]').forEach(b=>b.onclick=()=>exportFullReport());
+  main.querySelectorAll('[data-xf]').forEach(b=>b.onclick=e=>{e.stopPropagation();downloadRows('Feeder_'+b.dataset.xf+'_report','Feeder '+b.dataset.xf,rowsFeederDetail(b.dataset.xf),b.dataset.fmt)});
+  main.querySelectorAll('[data-xa]').forEach(b=>b.onclick=e=>{e.stopPropagation();downloadRows('Area_'+b.dataset.xa+'_report','Area '+b.dataset.xa,rowsAreaDetail(b.dataset.xa),b.dataset.fmt)});
   main.querySelectorAll('[data-gofeeder]').forEach(b=>b.onclick=e=>{e.stopPropagation();S.fdr=b.dataset.gofeeder;S.flast=null;S.fpending=null;S.ftab='pending';try{localStorage.setItem(LSFS,S.fdr)}catch(e){}go('feeder')});
   main.querySelectorAll('[data-goarea]').forEach(b=>b.onclick=e=>{e.stopPropagation();S.adr=b.dataset.goarea;S.alast=null;S.apending=null;S.atab='pending';try{localStorage.setItem(LSAS,S.adr)}catch(e){}go('area')});
   main.querySelectorAll('[data-keep]').forEach(b=>b.onclick=()=>resolveConflict(b.dataset.keep,b.dataset.kd));
   main.querySelectorAll('[data-fkeep]').forEach(b=>b.onclick=()=>resolveFConflict(b.dataset.fkeep,b.dataset.fkf));
   Who.fill(main);
 }
-/* report downloads */
-function exportFeederReport(){
+/* report rows: every download is built from these, as Excel (.xlsx) or CSV */
+function rowsFeederReport(){
   const R=reportData(),fel=fElsewhere();
   const rows=[['FEEDER_CODE','FEEDER','STRUCTURES_MAPPED','PUBLIC','APARTMENT','INDUSTRIAL','STRUCTURES_CONFIRMED','STRUCTURES_FROM_OTHER_FEEDER','STRUCTURES_NOT_ON_FEEDER','STRUCTURES_PENDING','SERVICES','SINGLE_PHASE','THREE_PHASE','LOAD_KW','SERVICES_VERIFIED','SERVICES_NOT_FOUND','SERVICES_SEEN_OTHER_DTR','SERVICES_PENDING','PERCENT_VERIFIED']];
   for(const f of S.feeders){const a=R.byF.get(f.fc)||zero(),st=fStats(f,fel);const ty={PUBLIC:0,APRMT:0,INDUSTRIAL:0};f.list.forEach(d=>{if(d.type in ty)ty[d.type]++});
     rows.push([f.fc,f.name,st.n,ty.PUBLIC,ty.APRMT,ty.INDUSTRIAL,st.ok,st.other,st.nf+st.el,st.pending,a.svc,a.p1,a.p3,Math.round(a.ld*100)/100,a.ok,a.nf,a.el,a.p,pct(a.ok,a.svc)])}
-  saveRaw('HSagar_feeder_wise_report.csv',rows.map(csvRow).join('\n'));
+  return rows;
 }
-function exportFeederDetail(fc){
-  const f=S.fMap.get(fc),R=reportData(),v=fvrec(fc),fel=fElsewhere();
-  const rows=[['FEEDER','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','AREAS','SERVICES','SINGLE_PHASE','THREE_PHASE','LOAD_KW','FEEDER_CHECK','SERVICES_VERIFIED','SERVICES_PENDING']];
+const FD_HEAD=['FEEDER_CODE','FEEDER','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','AREAS','SERVICES','SINGLE_PHASE','THREE_PHASE','LOAD_KW','FEEDER_CHECK','CHECKED_BY','CHECKED_AT','SERVICES_VERIFIED','SERVICES_PENDING'];
+function feederDetailRows(f,R,fel){
+  const v=fvrec(f.fc),out=[];
   for(const d of f.list){const a=R.byD.get(d.code)||zero(),r=v.s[d.code],e=fel.get(d.code);
-    rows.push([f.name,d.code,d.name||'NO NAME',STYPE[d.type]||d.type,(d.areas||[]).join('; '),a.svc,a.p1,a.p3,Math.round(a.ld*100)/100,live(r)?FLBL[r.st]:e?'Seen on other feeder':'Pending',a.ok,a.p])}
-  saveRaw('Feeder_'+fc+'_report.csv',rows.map(csvRow).join('\n'));
+    out.push([f.fc,f.name,d.code,d.name||'NO NAME',STYPE[d.type]||d.type||'',(d.areas||[]).join('; '),a.svc,a.p1,a.p3,Math.round(a.ld*100)/100,live(r)?FLBL[r.st]:e?'Seen on '+fName(e.fc):'Pending',live(r)?Backup.byName(r.by):'',live(r)?tstr(r.t):'',a.ok,a.p])}
+  return out;
 }
-function exportAreaReport(){
+function rowsFeederDetail(fc){const f=S.fMap.get(fc);return [FD_HEAD,...feederDetailRows(f,reportData(),fElsewhere())]}
+function rowsAllFeederStructures(){const R=reportData(),fel=fElsewhere();return [FD_HEAD,...S.feeders.flatMap(f=>feederDetailRows(f,R,fel))]}
+function rowsAreaReport(){
   const R=reportData();
   const rows=[['AREA_CODE','AREA_NAME','STRUCTURES_LINKED','STRUCTURES_CONFIRMED','STRUCTURES_FOUND_NOT_MAPPED','STRUCTURES_NOT_IN_AREA','STRUCTURES_PENDING','SERVICES','SINGLE_PHASE','THREE_PHASE','LOAD_KW','SERVICES_VERIFIED','SERVICES_NOT_FOUND','SERVICES_SEEN_OTHER_DTR','SERVICES_PENDING','PERCENT_VERIFIED']];
   for(const ar of S.areas){const a=R.byA.get(ar.ac)||zero(),st=aStats(ar);
     rows.push([ar.ac,ar.name,st.n,st.ok,st.other,st.nf,st.pending,a.svc,a.p1,a.p3,Math.round(a.ld*100)/100,a.ok,a.nf,a.el,a.p,pct(a.ok,a.svc)])}
-  saveRaw('HSagar_area_wise_report.csv',rows.map(csvRow).join('\n'));
+  return rows;
 }
-function exportAreaDetail(ac){
-  const ar=S.aMap.get(ac),R=reportData(),v=avrec(ac);
-  const rows=[['AREA_CODE','AREA_NAME','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','FEEDER','SERVICES_IN_AREA','TOTAL_SERVICES','AREA_CHECK','VERIFIED_IN_AREA','PENDING_IN_AREA']];
-  for(const {d,n} of ar.list){const r=v.s[d.code];let ok=0,p=0;for(const o of d.list)if(S.areaByName.get(o.an)===ac){const s=R.ss.get(o.u);if(s==='ok')ok++;else if(s==='p')p++}
-    rows.push([ac,ar.name,d.code,d.name||'NO NAME',STYPE[d.type]||d.type,d.feeder||'',n,d.list.length,live(r)?ALBL[r.st]:'Pending',ok,p])}
-  saveRaw('Area_'+ac+'_report.csv',rows.map(csvRow).join('\n'));
+const AD_HEAD=['AREA_CODE','AREA_NAME','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','FEEDER','SERVICES_IN_AREA','TOTAL_SERVICES','AREA_CHECK','CHECKED_BY','CHECKED_AT','VERIFIED_IN_AREA','PENDING_IN_AREA'];
+function areaDetailRows(ar,R){
+  const v=avrec(ar.ac),out=[];
+  for(const {d,n} of ar.list){const r=v.s[d.code];let ok=0,p=0;for(const o of d.list)if(S.areaByName.get(o.an)===ar.ac){const s=R.ss.get(o.u);if(s==='ok')ok++;else if(s==='p')p++}
+    out.push([ar.ac,ar.name,d.code,d.name||'NO NAME',STYPE[d.type]||d.type||'',d.feeder||'',n,d.list.length,live(r)?ALBL[r.st]:'Pending',live(r)?Backup.byName(r.by):'',live(r)?tstr(r.t):'',ok,p])}
+  return out;
+}
+function rowsAreaDetail(ac){return [AD_HEAD,...areaDetailRows(S.aMap.get(ac),reportData())]}
+function rowsAllAreaStructures(){const R=reportData();return [AD_HEAD,...S.areas.flatMap(ar=>areaDetailRows(ar,R))]}
+function rowsConflicts(){
+  const rows=[['CONFLICT','SERVICE_NO_OR_STRUCTURE','UKSCNO','NAME','METER_NO','MASTER_DTR_OR_FEEDER','RECORDED_ON','RESULT','SOURCE','RECORDED_BY','RECORDED_AT','REASON']];
+  for(const [u,c] of conflictIndex()){const o=S.byU.get(u);if(!o)continue;
+    for(const x of c){const d=S.dtrMap.get(x.dtr);rows.push(['Service on two DTRs',o.s,o.u,o.n,o.m,o.dtr,x.dtr+' '+(d&&d.name||'NO NAME'),ST_LABEL[x.rec.st]||x.rec.st,x.rec.src||'',Backup.byName(x.rec.by),tstr(x.rec.t),x.rec.reason||''])}}
+  for(const [k,c] of fConflictIndex()){const d=S.dtrMap.get(k);
+    for(const x of c)rows.push(['Structure on two feeders',k,'',d&&d.name||'NO NAME','',d&&d.fc?fName(d.fc):'none',fName(x.fc),FLBL[x.rec.st]||x.rec.st,x.rec.src||'',Backup.byName(x.rec.by),tstr(x.rec.t),x.rec.reason||''])}
+  return rows;
+}
+function rowsSummary(){
+  const R=reportData(),t=zero();for(const a of R.byD.values())for(const k in t)t[k]+=a[k];
+  const elsew=elsewhereIndex();const started=S.dtrs.filter(d=>{const s=dtrStats(d,elsew);return s.ok+s.nf+s.el+s.other+s.unk>0});
+  const complete=started.filter(d=>dtrStats(d,elsew).pending===0&&d.list.length).length;
+  const fel=fElsewhere();let fOk=0,fN=0;S.feeders.forEach(f=>{const s=fStats(f,fel);fOk+=s.ok+s.nf+s.el;fN+=s.n});
+  let aOk=0,aN=0;S.areas.forEach(a=>{const s=aStats(a);aOk+=s.ok+s.nf;aN+=s.n});
+  let other=0,unk=0;for(const v of Object.values(S.ver)){for(const r of Object.values(v.s||{}))if(live(r)&&(r.st==='other'||r.st==='conf'))other++;for(const r of Object.values(v.x||{}))if(live(r))unk++}
+  return [['ITEM','VALUE'],['Section',SECTION.name+' · ERO '+SECTION.ero],['Report made',new Date().toLocaleString('en-IN')],['Made by',Who.name||''],
+    ['Service mapping date',S.meta.mapOn||''],['Consumer master date',S.meta.masterOn||''],
+    ['Services in mapping',t.svc],['Single phase',t.p1],['Three phase',t.p3],['Connected load (kW)',Math.round(t.ld*100)/100],
+    ['Services verified',t.ok],['Percent verified',pct(t.ok,t.svc)],['Services not found / no access',t.nf],['Services seen on another DTR',t.el],['Services pending',t.p],
+    ['DTRs in section',S.dtrs.length],['DTRs with services',S.dtrs.filter(d=>d.list.length).length],['DTRs started',started.length],['DTRs complete',complete],
+    ['Feeders',S.feeders.length],['Structures checked on feeders',fOk],['Structures on feeders',fN],
+    ['Area codes',S.areas.length],['Structure-area links checked',aOk],['Structure-area links',aN],
+    ['Meters on wrong DTR',other],['Meters not in master',unk],['Services on two DTRs (conflicts)',conflictIndex().size],['Structures on two feeders (conflicts)',fConflictIndex().size]];
 }
 async function resolveConflict(u,keep){
   if(!Who.sup){toast('Only the admin can resolve conflicts');return}
@@ -2049,7 +2071,9 @@ async function resolveConflict(u,keep){
   toast(o.s+' kept on DTR '+keep);vReport();
 }
 
-/* ---------- export ---------- */
+/* ---------- export: every report downloads as Excel (.xlsx) or CSV ---------- */
+const FP='HSagar_';
+const XLSX_MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const csvRow=r=>r.map(c=>{c=String(c==null?'':c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c}).join(',');
 const HEAD=['DTR_VERIFIED','STRUCTURE_NAME','FEEDER','RESULT','SERVICE_NO','UKSCNO','METER_NO','MASTER_DTR','NAME','PHASE','SOURCE','SCANNED_TEXT','TIME'];
 const LBL={ok:'VERIFIED',other:'FOUND HERE - MASTER DTR DIFFERS',conf:'DISPUTED - IN ADMIN REVIEW',nf:'NOT FOUND AT SITE',na:'NO ACCESS'};
@@ -2063,37 +2087,87 @@ function dtrRows(d,withPending,elsew){
   for(const r of Object.values(v.x))if(live(r)){const o=r.u?S.byU.get(r.u):null;rows.push([d.code,d.name||'NO NAME',d.feeder||'',o?'NOT IN CURRENT MAPPING':'METER NOT IN MASTER',o?o.s:'',o?o.u:'',o?o.m:r.raw,o?o.dtr:'',o?o.n:'',o?o.ph:'',r.src,r.raw,tstr(r.t)])}
   return rows;
 }
-async function saveCsv(name,rows){
-  const csv=[HEAD,...rows].map(csvRow).join('\n');
-  if(await nativeSave(name,csv))return;
-  try{if(window.claude&&window.claude.use){const dl=await window.claude.use('downloads');if(dl){await dl.save({filename:name,data:csv});toast('Saved '+name);return}}}catch(e){if(e&&e.code==='declined')return}
-  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){toast('Download is not available here')}
-}
-function exportDtr(d){saveCsv('DTR_'+d.code+'_verification.csv',dtrRows(d,true))}
-function exportDtrDetails(){ // every structure code of the section with name (NO NAME when the mapping has none)
+function rowsDtr(d){return [HEAD,...dtrRows(d,true)]}
+function rowsFindings(){const elsew=elsewhereIndex();return [HEAD,...S.dtrs.filter(d=>S.ver[d.code]).flatMap(d=>dtrRows(d,false,elsew))]}
+function rowsAllServices(){const elsew=elsewhereIndex();return [HEAD,...S.dtrs.flatMap(d=>dtrRows(d,true,elsew))]}
+function rowsDtrDetails(){ // every structure code of the section with its counts
   const elsew=elsewhereIndex();
-  const rows=[['STRUCTURE_CODE','STRUCTURE_NAME','STRUCTURE_TYPE','FEEDER','AREAS','SERVICES','SINGLE_PHASE','THREE_PHASE','VERIFIED','PENDING']];
-  for(const d of S.dtrs){const st=dtrStats(d,elsew);rows.push([d.code,d.name||'NO NAME',d.type?(STYPE[d.type]||d.type):'',d.feeder,(d.areas||[]).join('; '),d.list.length,d.p1,d.p3,st.ok,st.pending])}
-  const csv=rows.map(csvRow).join('\n');saveRaw('HSagar_DTR_details.csv',csv);
+  const rows=[['STRUCTURE_CODE','STRUCTURE_NAME','STRUCTURE_TYPE','KVA','SUBSTATION','FEEDER','AREAS','SERVICES','SINGLE_PHASE','THREE_PHASE','VERIFIED','NOT_FOUND','SEEN_ON_OTHER_DTR','METERS_FROM_OTHER_DTR','METERS_NOT_IN_MASTER','PENDING','PERCENT_DONE']];
+  for(const d of S.dtrs){const st=dtrStats(d,elsew);rows.push([d.code,d.name||'NO NAME',d.type?(STYPE[d.type]||d.type):'',d.kva||'',d.ss||'',d.feeder||'',(d.areas||[]).join('; '),d.list.length,d.p1,d.p3,st.ok,st.nf,st.el,st.other,st.unk,st.pending,pct(st.ok+st.nf+st.el,st.n)])}
+  return rows;
 }
-/* Android app (Capacitor): files are written to the app cache and handed to the share sheet (WhatsApp, Drive, Files) */
-async function nativeSave(name,text){
-  if(!isNative())return false;
-  const FS=capPlugin('Filesystem'),SH=capPlugin('Share');
-  if(!FS){toast('File saving is not available in this build');return true}
-  try{
-    const r=await FS.writeFile({path:name,data:text,directory:'CACHE',encoding:'utf8'});
-    if(SH){try{await SH.share({title:name,files:[r.uri],dialogTitle:'Save or send '+name})}catch(e){if(!/cancel/i.test(String(e&&e.message)))await SH.share({title:name,url:r.uri}).catch(()=>{})}}
-    else toast('Saved '+name+' in the app');
-  }catch(e){toast('Could not save '+name)}
-  return true;
+function rowsFeederCheck(f){ // Feeders tab: this feeder's structures with the check result
+  const v=fvrec(f.fc),el=fElsewhere(),rows=[['FEEDER','FEEDER_CODE','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','SERVICES','RESULT','MAPPING_FEEDER','SOURCE','TIME','REASON']];
+  for(const d of f.list){const r=v.s[d.code],e=el.get(d.code);
+    rows.push([f.name,f.fc,d.code,d.name||'NO NAME',STYPE[d.type]||d.type||'',d.list.length,live(r)?FLBL[r.st].toUpperCase():e?'SEEN ON '+fName(e.fc):'PENDING',fName(d.fc),live(r)?r.src:'',live(r)?tstr(r.t):'',live(r)?r.reason||'':''])}
+  for(const [k,r] of Object.entries(v.s))if(live(r)&&(r.st==='other'||r.st==='conf')){const d=S.dtrMap.get(k);if(d)rows.push([f.name,f.fc,k,d.name||'NO NAME',STYPE[d.type]||d.type||'',d.list.length,FLBL[r.st].toUpperCase(),d.fc?fName(d.fc):'none',r.src,tstr(r.t),r.reason||''])}
+  return rows;
 }
-async function saveRaw(name,csv){
-  if(await nativeSave(name,csv))return;
-  try{if(window.claude&&window.claude.use){const dl=await window.claude.use('downloads');if(dl){await dl.save({filename:name,data:csv});toast('Saved '+name);return}}}catch(e){if(e&&e.code==='declined')return}
-  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){toast('Download is not available here')}
+function rowsAreaCheck(a){ // Areas tab: this area's structures with the check result
+  const v=avrec(a.ac),rows=[['AREA_CODE','AREA_NAME','STRUCTURE_CODE','STRUCTURE_NAME','TYPE','SERVICES_IN_AREA','TOTAL_SERVICES','ALL_MAPPING_AREAS','RESULT','SOURCE','TIME']];
+  for(const {d,n} of a.list){const r=v.s[d.code];rows.push([a.ac,a.name,d.code,d.name||'NO NAME',STYPE[d.type]||d.type||'',n,d.list.length,Object.keys(d.acs||{}).join(' '),live(r)?ALBL[r.st].toUpperCase():'PENDING',live(r)?r.src:'',live(r)?tstr(r.t):''])}
+  for(const [k,r] of Object.entries(v.s))if(live(r)&&r.st==='other'){const d=S.dtrMap.get(k);if(d)rows.push([a.ac,a.name,k,d.name||'NO NAME',STYPE[d.type]||d.type||'',0,d.list.length,Object.keys(d.acs||{}).join(' '),ALBL.other.toUpperCase(),r.src,tstr(r.t)])}
+  return rows;
 }
-function exportAll(){const rows=[],elsew=elsewhereIndex();for(const d of S.dtrs)if(S.ver[d.code])rows.push(...dtrRows(d,false,elsew));if(!rows.length){toast('Nothing verified yet');return}saveCsv('HSagar_DTR_verification.csv',rows)}
+const XP={ // report downloads: file name, sheet name, rows
+  feeders:()=>[FP+'feeder_wise_report','Feeder-wise',rowsFeederReport()],
+  feederStructures:()=>[FP+'feeder_structures','Feeder structures',rowsAllFeederStructures()],
+  areas:()=>[FP+'area_wise_report','Area-wise',rowsAreaReport()],
+  areaStructures:()=>[FP+'area_structures','Area structures',rowsAllAreaStructures()],
+  dtrs:()=>[FP+'DTR_wise_report','DTR-wise',rowsDtrDetails()],
+  all:()=>[FP+'service_findings','Service findings',rowsFindings()],
+  services:()=>[FP+'all_services_status','All services',rowsAllServices()],
+  conflicts:()=>[FP+'conflicts','Conflicts',rowsConflicts()]
+};
+const XLBL={feeders:'Feeder-wise report',feederStructures:'Structures on each feeder',areas:'Area-wise report',areaStructures:'Structures in each area',dtrs:'DTR-wise report',all:'Service findings (verified so far)',services:'All services with status',conflicts:'Conflicts'};
+const xBtns=(attr,val)=>`<button class="btn sm" ${attr}="${h(val)}" data-fmt="xlsx">${I.dl}Excel</button><button class="btn sm" ${attr}="${h(val)}" data-fmt="csv">CSV</button>`;
+const stamp=()=>new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+async function exportReport(key,fmt){const [file,sheet,rows]=XP[key]();
+  if(key==='all'&&rows.length<2){toast('Nothing verified yet');return}
+  return downloadRows(file,sheet,rows,fmt)}
+async function downloadRows(file,sheet,rows,fmt){
+  if(fmt!=='xlsx')return saveFile(file+'.csv',rows.map(csvRow).join('\n'),'text/csv');
+  toast('Preparing Excel…');
+  try{await saveFile(file+'.xlsx',await xlsxBook([[sheet,rows]]),XLSX_MIME)}catch(e){toast('Could not make the Excel file'+(navigator.onLine===false&&!window.XLSX?' (needs the internet once in a browser)':''))}
+}
+async function exportFullReport(){ // one Excel workbook with every report as its own sheet
+  toast('Preparing Excel report…');
+  try{const sheets=[['Summary',rowsSummary()],...['dtrs','all','feeders','feederStructures','areas','areaStructures','conflicts'].map(k=>{const x=XP[k]();return [x[1],x[2]]})];
+    await saveFile(FP+'full_report_'+stamp()+'.xlsx',await xlsxBook(sheets),XLSX_MIME)}
+  catch(e){toast('Could not make the Excel file'+(navigator.onLine===false&&!window.XLSX?' (needs the internet once in a browser)':''))}
+}
+async function xlsxBook(sheets){ // [[sheetName, rows]] -> .xlsx bytes
+  await loadXlsxLib();
+  const wb=XLSX.utils.book_new(),used=new Set();
+  for(const [name,rows0] of sheets){
+    const rows=rows0.length?rows0:[['No data']];const ws=XLSX.utils.aoa_to_sheet(rows);
+    const w=[];for(const r of rows.slice(0,500))r.forEach((c,i)=>{const l=String(c==null?'':c).length;w[i]=Math.max(w[i]||6,Math.min(l+2,60))});
+    ws['!cols']=w.map(wch=>({wch}));
+    if(rows.length>1&&rows[0].length>1)ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:rows[0].length-1}})};
+    let nm=String(name).replace(/[\[\]:*?\/\\]/g,' ').slice(0,31),i=2;while(used.has(nm))nm=nm.slice(0,28)+' '+i++;used.add(nm);
+    XLSX.utils.book_append_sheet(wb,ws,nm);
+  }
+  return new Uint8Array(XLSX.write(wb,{bookType:'xlsx',type:'array',compression:true}));
+}
+function b64(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s)}
+/* save a file: Android app -> app cache + share sheet (WhatsApp, Drive, Files); claude.ai page -> downloads; browser -> download */
+async function saveFile(name,data,mime){
+  if(isNative()){
+    const FS=capPlugin('Filesystem'),SH=capPlugin('Share');
+    if(!FS){toast('File saving is not available in this build');return}
+    try{
+      const r=await FS.writeFile(typeof data==='string'?{path:name,data,directory:'CACHE',encoding:'utf8'}:{path:name,data:b64(data),directory:'CACHE'});
+      if(SH){try{await SH.share({title:name,files:[r.uri],dialogTitle:'Save or send '+name})}catch(e){if(!/cancel/i.test(String(e&&e.message)))await SH.share({title:name,url:r.uri}).catch(()=>{})}}
+      else toast('Saved '+name+' in the app');
+    }catch(e){toast('Could not save '+name)}
+    return;
+  }
+  const blob=new Blob([data],{type:mime||'text/plain'});
+  try{if(window.claude&&window.claude.use){const dl=await window.claude.use('downloads');if(dl){await dl.save({filename:name,data:blob});toast('Saved '+name);return}}}catch(e){if(e&&e.code==='declined')return}
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}catch(e){toast('Download is not available here')}
+}
+async function saveRaw(name,text){return saveFile(name,text,name.endsWith('.json')?'application/json':'text/csv')}
+function exportAll(fmt){return exportReport('all',fmt||'csv')}
 
 /* ---------- GUIDE ---------- */
 function vGuide(){
@@ -2257,7 +2331,7 @@ async function sectionJson(withBackup){
   const bc=Backup.cfg();if(withBackup&&Who.sup&&bc.url)j.backup={url:bc.url};return j}
 async function exportDataFile(){
   if(!S.P){toast('No data loaded');return}
-  saveRaw('HSagar_section_data.json',JSON.stringify(await sectionJson(true)));
+  saveRaw(FP+'section_data.json',JSON.stringify(await sectionJson(true)));
 }
 $('dataFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)importDataFile(f)};
 $('xlsFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)importExcel(f)};
