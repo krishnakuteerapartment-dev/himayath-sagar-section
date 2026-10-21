@@ -836,7 +836,7 @@ const Drawer={el:null,bg:null,
 };
 $('menuBtn').onclick=()=>Drawer.isOpen()?Drawer.close():Drawer.open();
 
-/* DTR list: all 800 codes with name and progress; type a number (001) or part of a name to jump. Only the visible rows are drawn. */
+/* DTR list: every DTR of the section with name and progress; type a number (001) or part of a name to jump. Only the visible rows are drawn. */
 function openDtrSheet(opts){
   opts=opts||{};const cur=opts.cur===undefined?S.dtr:opts.cur;
   const RH=62;let items=S.dtrs,filt='all';
@@ -1295,7 +1295,7 @@ const NScan={active:false,view:null,lastText:'',lastAt:0,torch:false,zoom:1,maxZ
     const res=this.result();
     $('soSheet').innerHTML=`<div class="so-stats">${this.stats().map(([l,n,c])=>`<span class="${c}"><b>${n}</b>${l}</span>`).join('')}</div>
       ${res||'<div class="so-empty">Each code you scan shows here, with a beep.</div>'}
-      ${this.typing?`<form class="row" id="soForm"><label class="field">${I.search}<input id="soIn" autocomplete="off" placeholder="${this.view==='verify'?'Meter / service / UKSCNO':'Structure code (029)'}"></label><button class="btn" type="submit">Check</button></form>`
+      ${this.typing?`<form class="row" id="soForm"><label class="field">${I.search}<input id="soIn" autocomplete="off" placeholder="${this.view==='verify'?'Meter / service / UKSCNO':'Structure code or name'}"></label><button class="btn" type="submit">Check</button></form>`
         :`<button class="btn sm" id="soType" style="align-self:center">${I.kbd}Type a number</button>`}`;
     Who.fill($('soSheet'));
     if(k){const f=$('soFrame');f.classList.remove('ok','warn','bad');void f.offsetWidth;f.classList.add(k);clearTimeout(this._ft);this._ft=setTimeout(()=>f.classList.remove(k),900)}
@@ -1522,7 +1522,7 @@ function renderFeeder(){
     <button class="btn big" id="fListBtn">${I.check}Tick from list</button>
   </div>
   <div id="panel">${S.fpanel==='scan'?scanPanel():''}</div>
-  <div class="row"><label class="field" for="fIn">${I.search}<input id="fIn" type="search" placeholder="Code (029) or name" autocomplete="off"></label><button class="btn" id="fCheck">Check</button></div>
+  <div class="row"><label class="field" for="fIn">${I.search}<input id="fIn" type="search" placeholder="Structure code or name" autocomplete="off"></label><button class="btn" id="fCheck">Check</button></div>
   <div class="hint" id="fHint" hidden></div>
   <div id="fRes">${fResultBlock()}</div>
   <div id="fConf">${fBanner(f)}</div>
@@ -1689,7 +1689,7 @@ function renderArea(){
     <button class="btn big" id="aListBtn">${I.check}Tick from list</button>
   </div>
   <div id="panel">${S.apanel==='scan'?scanPanel():''}</div>
-  <div class="row"><label class="field" for="aIn">${I.search}<input id="aIn" type="search" placeholder="Code (029) or name" autocomplete="off"></label><button class="btn" id="aCheck">Check</button></div>
+  <div class="row"><label class="field" for="aIn">${I.search}<input id="aIn" type="search" placeholder="Structure code or name" autocomplete="off"></label><button class="btn" id="aCheck">Check</button></div>
   <div class="hint" id="aHint" hidden></div>
   <div id="aRes">${aResultBlock()}</div>
   <div class="stabs four" id="aTabs" role="group" aria-label="Show structures">${aTabsHtml(st)}</div>
@@ -1917,13 +1917,13 @@ function rSummary(R){
     <div><dt>Not found / no access</dt><dd>${fmt(t.nf)}</dd></div><div><dt>Seen on another DTR</dt><dd>${fmt(t.el)}</dd></div></dl></div>
   <div class="card stack"><h3>Downloads</h3>
     <div class="dlgrid"><button class="btn sm" data-x="feeders">${I.dl}Feeder-wise report</button><button class="btn sm" data-x="areas">${I.dl}Area-wise report</button>
-    <button class="btn sm" data-x="dtrs">${I.dl}DTR details (800)</button><button class="btn sm" data-x="all">${I.dl}All service findings</button></div></div>`;
+    <button class="btn sm" data-x="dtrs">${I.dl}DTR details (${fmt(S.dtrs.length)})</button><button class="btn sm" data-x="all">${I.dl}All service findings</button></div></div>`;
 }
 function rDtr(R){
   const elsew=elsewhereIndex();
   const rows=S.dtrs.map(d=>({d,st:dtrStats(d,elsew)})).filter(x=>S.rall?true:x.st.ok+x.st.nf+x.st.other+x.st.unk+x.st.el>0);
   const shown=rows.slice(0,S.rlimit||150);
-  return `<div class="row between"><div class="chips2"><button class="chip2" data-rall="0" aria-pressed="${!S.rall}">Started</button><button class="chip2" data-rall="1" aria-pressed="${!!S.rall}">All 800</button></div>
+  return `<div class="row between"><div class="chips2"><button class="chip2" data-rall="0" aria-pressed="${!S.rall}">Started</button><button class="chip2" data-rall="1" aria-pressed="${!!S.rall}">All ${fmt(S.dtrs.length)}</button></div>
     <div class="row"><button class="btn sm" data-x="dtrs">${I.dl}DTR details</button><button class="btn sm" data-x="all">${I.dl}Findings</button></div></div>
   ${rows.length?`<div class="list">${shown.map(({d,st})=>`<button class="li" data-d="${h(d.code)}">
       <div class="t"><span class="mono">${h(d.code)}</span> · ${h(d.name||'NO NAME')}</div><div class="r"><b>${st.ok}</b>/${st.n} ${meter(st.ok+st.nf+st.el,st.n)}</div>
@@ -2070,7 +2070,7 @@ async function saveCsv(name,rows){
   try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){toast('Download is not available here')}
 }
 function exportDtr(d){saveCsv('DTR_'+d.code+'_verification.csv',dtrRows(d,true))}
-function exportDtrDetails(){ // all 800 structure codes with name (NO NAME when the mapping has none)
+function exportDtrDetails(){ // every structure code of the section with name (NO NAME when the mapping has none)
   const elsew=elsewhereIndex();
   const rows=[['STRUCTURE_CODE','STRUCTURE_NAME','STRUCTURE_TYPE','FEEDER','AREAS','SERVICES','SINGLE_PHASE','THREE_PHASE','VERIFIED','PENDING']];
   for(const d of S.dtrs){const st=dtrStats(d,elsew);rows.push([d.code,d.name||'NO NAME',d.type?(STYPE[d.type]||d.type):'',d.feeder,(d.areas||[]).join('; '),d.list.length,d.p1,d.p3,st.ok,st.pending])}
